@@ -5,50 +5,63 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Wishlist;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class WishlistController extends Controller
 {
     public function index()
     {
-        $wishlist = Wishlist::with('product')
-            ->where('user_id', auth()->id())
-            ->latest()
-            ->get();
+        return handleApiRequest(function () {
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Wishlist List',
-            'data' => $wishlist
-        ]);
+            $wishlist = Wishlist::with('product')
+                ->where('user_id', Auth::id())
+                ->latest()
+                ->get();
+
+            $this->response['msg'] = 'Wishlist List';
+            $this->response['data'] = $wishlist;
+
+            return response()->json($this->response);
+        });
     }
 
     public function store(Request $request)
-    
     {
-    $request->validate([
-        'product_id' => 'required|exists:products,id',
-    ]);
+        return handleApiRequest(function () use ($request) {
 
-    $wishlist = Wishlist::firstOrCreate([
-        'user_id' => auth()->id(),
-        'product_id' => $request->product_id,
-    ]);
+            $request->validate([
+                'product_id' => 'required|exists:products,id',
+            ]);
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Product Added To Wishlist',
-        'data' => $wishlist->load('product')
-    ], 201);
+            $wishlist = Wishlist::firstOrCreate([
+                'user_id' => Auth::id(),
+                'product_id' => $request->product_id,
+            ]);
+
+            $this->response['msg'] = 'Product Added To Wishlist';
+            $this->response['data'] = $wishlist->load('product');
+
+            return response()->json($this->response, 201);
+        });
     }
 
     public function destroy(Wishlist $wishlist)
     {
-        $wishlist->delete();
+        return handleApiRequest(function () use ($wishlist) {
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Product Removed From Wishlist',
-            'data' => null
-        ]);
+            if ($wishlist->user_id !== Auth::id()) {
+                throw new \App\Http\Exceptions\ApiStatusException(
+                    'Unauthorized',
+                    403
+                );
+            }
+
+            $wishlist->delete();
+
+            $this->response['msg'] = 'Product Removed From Wishlist';
+            $this->response['data'] = null;
+
+            return response()->json($this->response);
+        });
     }
 }

@@ -11,77 +11,88 @@ class ProductController extends Controller
 {
     public function index()
     {
-        $products = Product::with('category')
-            ->latest()
-            ->get();
+        return handleApiRequest(function () {
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Admin Product List',
-            'data' => $products
-        ]);
+            $products = Product::with('category')
+                ->latest()
+                ->get();
+
+            $this->response['msg'] = 'Admin Product List';
+            $this->response['data'] = $products;
+
+            return response()->json($this->response);
+        });
     }
 
     public function show(Product $product)
     {
-        return response()->json([
-            'success' => true,
-            'message' => 'Product Details',
-            'data' => $product->load('category')
-        ]);
+        return handleApiRequest(function () use ($product) {
+
+            $this->response['msg'] = 'Product Details';
+            $this->response['data'] = $product->load('category');
+
+            return response()->json($this->response);
+        });
     }
 
     public function update(Request $request, Product $product)
     {
-        $request->validate([
-            'name' => 'sometimes|required|string',
-            'category_id' => 'sometimes|required|exists:categories,id',
-            'description' => 'nullable|string',
-            'price' => 'sometimes|required|numeric|min:0',
-            'discount_price' => 'nullable|numeric|min:0',
-            'stock' => 'sometimes|required|integer|min:0',
-            'unit' => 'sometimes|required|string',
-            'featured' => 'nullable|boolean',
-            'status' => 'nullable|boolean',
-        ]);
+        return handleApiRequest(function () use ($request, $product) {
 
-        $data = $request->only([
-            'name',
-            'category_id',
-            'description',
-            'price',
-            'discount_price',
-            'stock',
-            'unit',
-            'featured',
-            'status',
-        ]);
+            $request->validate([
+                'name' => 'sometimes|required|string',
+                'category_id' => 'sometimes|required|exists:categories,id',
+                'description' => 'nullable|string',
+                'price' => 'sometimes|required|numeric|min:0',
+                'discount_price' => 'nullable|numeric|min:0',
+                'stock' => 'sometimes|required|integer|min:0',
+                'unit' => 'sometimes|required|string',
+                'featured' => 'nullable|boolean',
+                'status' => 'nullable|boolean',
+            ]);
 
-        if ($request->has('name')) {
-            $data['slug'] = Str::slug($request->name);
-        }
+            $data = $request->only([
+                'name',
+                'category_id',
+                'description',
+                'price',
+                'discount_price',
+                'stock',
+                'unit',
+                'featured',
+                'status',
+            ]);
 
-        $product->update($data);
+            if ($request->has('name')) {
+                $data['slug'] = Str::slug($request->name);
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Product Updated Successfully',
-            'data' => $product->fresh()->load('category')
-        ]);
+            $product->update($data);
+
+            $this->response['msg'] = 'Product Updated Successfully';
+            $this->response['data'] = $product->fresh()->load('category');
+
+            return response()->json($this->response);
+        });
     }
 
     public function destroy(Product $product)
     {
-        if ($product->image) {
-            deleteImage($product->image, 'products');
-        }
+        return handleApiRequest(function () use ($product) {
 
-        $product->delete();
+            if ($product->image) {
+                deleteImage(
+                    $product->image,
+                    'products'
+                );
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Product Deleted Successfully',
-            'data' => null
-        ]);
+            $product->delete();
+
+            $this->response['msg'] = 'Product Deleted Successfully';
+            $this->response['data'] = null;
+
+            return response()->json($this->response);
+        });
     }
 }

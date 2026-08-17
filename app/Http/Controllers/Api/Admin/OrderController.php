@@ -10,40 +10,50 @@ class OrderController extends Controller
 {
     public function index()
     {
-        $orders = Order::with('user', 'items.product')
-            ->latest()
-            ->get();
+        return handleApiRequest(function () {
 
-        return response()->json([
-            'success' => true,
-            'message' => 'All Orders',
-            'data' => $orders
-        ]);
+            $orders = Order::with('user', 'items.product')
+                ->latest()
+                ->get();
+
+            $this->response['msg'] = 'All Orders';
+            $this->response['data'] = $orders;
+
+            return response()->json($this->response);
+        });
     }
 
     public function show(Order $order)
     {
-        return response()->json([
-            'success' => true,
-            'message' => 'Order Details',
-            'data' => $order->load('user', 'items.product')
-        ]);
+        return handleApiRequest(function () use ($order) {
+
+            $this->response['msg'] = 'Order Details';
+            $this->response['data'] =
+                $order->load('user', 'items.product');
+
+            return response()->json($this->response);
+        });
     }
 
     public function update(Request $request, Order $order)
     {
-        $request->validate([
-            'status' => 'required|in:pending,confirmed,shipped,delivered,cancelled',
-        ]);
+        return handleApiRequest(function () use ($request, $order) {
 
-        $order->update([
-            'status' => $request->status,
-        ]);
+            $request->validate([
+                'status' => 'required|in:pending,confirmed,shipped,delivered,cancelled',
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Order Status Updated Successfully',
-            'data' => $order->fresh()->load('user', 'items.product')
-        ]);
+            $order->update([
+                'status' => $request->status,
+            ]);
+
+            $this->response['msg'] =
+                'Order Status Updated Successfully';
+
+            $this->response['data'] =
+                $order->fresh()->load('user', 'items.product');
+
+            return response()->json($this->response);
+        });
     }
 }

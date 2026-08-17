@@ -12,69 +12,63 @@ use Illuminate\Http\Request;
 class CategoryController extends Controller
 {
     public function index(Request $request)
+    
     {
-    $query = Category::where('status', true);
+    return handleApiRequest(function () use ($request) {
 
-    // Search
-    if ($request->filled('search')) {
-        $query->where(
-            'name',
-            'like',
-            '%' . $request->search . '%'
-        );
-    }
+        $query = Category::where('status', true);
 
+        // Search
+        if ($request->filled('search')) {
+            $query->where(
+                'name',
+                'like',
+                '%' . $request->search . '%'
+            );
+        }
 
-    // Status Filter
-    // if ($request->has('status')) {
-    //     $query->where(
-    //         'status',
-    //         filter_var(
-    //             $request->status,
-    //             FILTER_VALIDATE_BOOLEAN
-    //         )
-    //     );
-    // }
+        // Sorting
+        $sort = $request->sort ?? 'newest';
 
-    // Sorting
-    $sort = $request->sort ?? 'newest';
+        switch ($sort) {
 
-    switch ($sort) {
+            case 'name_asc':
+                $query->orderBy('name', 'asc');
+                break;
 
-        case 'name_asc':
-            $query->orderBy('name', 'asc');
-            break;
+            case 'name_desc':
+                $query->orderBy('name', 'desc');
+                break;
 
-        case 'name_desc':
-            $query->orderBy('name', 'desc');
-            break;
+            default:
+                $query->latest();
+                break;
+        }
 
-        default:
-            $query->latest();
-            break;
-    }
+        // Pagination
+        $categories = $query->paginate(10);
 
-    // Pagination
-    $categories = $query->paginate(10);
+        $this->response['msg'] = 'Category List';
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Category List',
-        'data' => [
+        $this->response['data'] = [
             'categories' => $categories->items(),
-
             'pagination' => [
                 'current_page' => $categories->currentPage(),
                 'last_page' => $categories->lastPage(),
                 'per_page' => $categories->perPage(),
                 'total' => $categories->total(),
             ],
-        ],
-    ]);
+        ];
+
+        return response()->json($this->response);
+    });
     }
 
     public function store(StoreCategoryRequest $request)
+    
     {
+    return handleApiRequest(function () use ($request) {
+
         $image = null;
 
         if ($request->image) {
@@ -90,12 +84,13 @@ class CategoryController extends Controller
             'status' => $request->status ?? true,
         ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Category Created Successfully',
-            'data' => $category
-        ], 201);
+        $this->response['msg'] = 'Category Created Successfully';
+        $this->response['data'] = $category;
+
+        return response()->json($this->response, 201);
+    });
     }
+
 
     public function show(Category $category)
     {
@@ -106,17 +101,23 @@ class CategoryController extends Controller
 
         return response()->json($this->response);
     });
-    
     }
 
     public function update(UpdateCategoryRequest $request, Category $category)
     {
+    return handleApiRequest(function () use ($request, $category) {
+
         $image = $category->image;
 
         if ($request->image && $request->image != $category->image) {
+
             deleteImage($category->image, 'categories');
 
-            moveImage($request->image, 'temp', 'categories');
+            moveImage(
+                $request->image,
+                'temp',
+                'categories'
+            );
 
             $image = $request->image;
         }
@@ -129,23 +130,31 @@ class CategoryController extends Controller
             'status' => $request->status ?? true,
         ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Category Updated Successfully',
-            'data' => $category->fresh()
-        ]);
+        $this->response['msg'] = 'Category Updated Successfully';
+        $this->response['data'] = $category->fresh();
+
+        return response()->json($this->response);
+    });
     }
 
     public function destroy(Category $category)
+    
     {
-        deleteImage($category->image, 'categories');
+    return handleApiRequest(function () use ($category) {
+
+        if ($category->image) {
+            deleteImage(
+                $category->image,
+                'categories'
+            );
+        }
 
         $category->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Category Deleted Successfully',
-            'data' => null
-        ]);
+        $this->response['msg'] = 'Category Deleted Successfully';
+        $this->response['data'] = null;
+
+        return response()->json($this->response);
+    });
     }
 }

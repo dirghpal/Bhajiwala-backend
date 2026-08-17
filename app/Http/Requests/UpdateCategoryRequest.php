@@ -13,11 +13,11 @@ class UpdateCategoryRequest extends FormRequest
 
     public function rules(): array
     {
-        return [
-            'name' => 'required|unique:categories,name,' . request()->category,
-            'description' => 'nullable',
-            'image' => 'nullable',
-            'status' => 'required|boolean',
-        ];
+    return [
+        'name' => 'required|string|unique:categories,name,' . $this->route('category')->id,
+        'image' => 'nullable|string',
+        'description' => 'nullable|string',
+        'status' => 'nullable|boolean',
+    ];
     }
 }

@@ -7,173 +7,180 @@ use App\Models\Cart;
 use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class OrderController extends Controller
 {
     public function index()
     {
-        $orders = Order::with('items.product')
-            ->where('user_id', auth()->id())
-            ->latest()
-            ->get();
+        return handleApiRequest(function () {
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Order List',
-            'data' => $orders
-        ]);
+            $orders = Order::with('items.product')
+                ->where('user_id',  Auth::id())
+                ->latest()
+                ->get();
+
+            $this->response['msg'] = 'Order List';
+            $this->response['data'] = $orders;
+
+            return response()->json($this->response);
+        });
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'address' => 'required|string',
-            'payment_method' => 'required|in:cod',
-        ]);
+        return handleApiRequest(function () use ($request) {
 
-        $cart = Cart::with('product')
-            ->where('user_id', auth()->id())
-            ->get();
-
-        if ($cart->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cart is empty',
-                'data' => null
-            ], 422);
-        }
-
-        DB::beginTransaction();
-
-        try {
-
-            //chack stock
-
-            foreach ($cart as $item) {
-
-                if (!$item->product) {
-                    throw new \Exception('Product not found');
-                }
-
-                if ($item->product->stock < $item->quantity) {
-                    throw new \Exception(
-                        "Insufficient stock for {$item->product->name}"
-                    );
-                }
-            }
-
-            // Calculate Total
-           
-            $totalAmount = 0;
-
-            foreach ($cart as $item) {
-
-                $totalAmount +=
-                    $item->product->price * $item->quantity;
-            }
-
-            
-            //Create Order
-           
-
-            $order = Order::create([
-                'user_id' => auth()->id(),
-                'total_amount' => $totalAmount,
-                'status' => 'pending',
-                'payment_method' => $request->payment_method,
-                'payment_status' => 'pending',
-                'address' => $request->address,
+            $request->validate([
+                'address' => 'required|string',
+                'payment_method' => 'required|in:cod',
             ]);
 
-            // Create Order Items + Reduce Stock
+            $cart = Cart::with('product')
+                ->where('user_id', Auth::id())
+                ->get();
 
-            foreach ($cart as $item) {
-
-                $itemTotal =
-                    $item->product->price * $item->quantity;
-
-                $order->items()->create([
-                    'product_id' => $item->product_id,
-                    'quantity' => $item->quantity,
-                    'price' => $item->product->price,
-                    'total' => $itemTotal,
-                ]);
-
-                // Reduce product stock
-                $item->product->decrement(
-                    'stock',
-                    $item->quantity
+            if ($cart->isEmpty()) {
+                throw new \App\Http\Exceptions\ApiStatusException(
+                    'Cart is empty',
+                    422
                 );
             }
 
-            // clear cart 
+            DB::beginTransaction();
 
-            Cart::where('user_id', auth()->id())->delete();
+            try {
 
+                // Check Stock
 
-            // Commit Transaction
-            DB::commit();
+                foreach ($cart as $item) {
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Order Created Successfully',
-                'data' => $order->load('items.product')
-            ], 201);
+                    if (!$item->product) {
+                        throw new \App\Http\Exceptions\ApiStatusException(
+                            'Product not found',
+                            404
+                        );
+                    }
 
-        } catch (\Throwable $e) {
+                    if ($item->product->stock < $item->quantity) {
+                        throw new \App\Http\Exceptions\ApiStatusException(
+                            "Insufficient stock for {$item->product->name}",
+                            422
+                        );
+                    }
+                }
 
-        //Roll back
-            DB::rollBack();
+                // Calculate Total
 
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-                'data' => null
-            ], 500);
-        }
+                $totalAmount = 0;
+
+                foreach ($cart as $item) {
+
+                    $totalAmount +=
+                        $item->product->price * $item->quantity;
+                }
+
+                // Create Order
+
+                $order = Order::create([
+                    'user_id' => Auth::id(),
+                    'total_amount' => $totalAmount,
+                    'status' => 'pending',
+                    'payment_method' => $request->payment_method,
+                    'payment_status' => 'pending',
+                    'address' => $request->address,
+                ]);
+
+                // Create Order Items + Reduce Stock
+
+                foreach ($cart as $item) {
+
+                    $itemTotal =
+                        $item->product->price * $item->quantity;
+
+                    $order->items()->create([
+                        'product_id' => $item->product_id,
+                        'quantity' => $item->quantity,
+                        'price' => $item->product->price,
+                        'total' => $itemTotal,
+                    ]);
+
+                    // Reduce Product Stock
+
+                    $item->product->decrement(
+                        'stock',
+                        $item->quantity
+                    );
+                }
+
+                // Clear Cart
+
+                Cart::where('user_id', Auth::id())->delete();
+
+                // Commit Transaction
+
+                DB::commit();
+
+                $this->response['msg'] = 'Order Created Successfully';
+                $this->response['data'] =
+                    $order->load('items.product');
+
+                return response()->json($this->response, 201);
+
+            } catch (\Throwable $e) {
+
+                DB::rollBack();
+
+                throw $e;
+            }
+        });
     }
 
     public function show(Order $order)
     {
-        if ($order->user_id !== auth()->id()) {
+        return handleApiRequest(function () use ($order) {
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized',
-                'data' => null
-            ], 403);
-        }
+            if ($order->user_id !== Auth::id()) {
+                throw new \App\Http\Exceptions\ApiStatusException(
+                    'Unauthorized',
+                    403
+                );
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Order Details',
-            'data' => $order->load('items.product')
-        ]);
+            $this->response['msg'] = 'Order Details';
+            $this->response['data'] =
+                $order->load('items.product');
+
+            return response()->json($this->response);
+        });
     }
 
     public function update(Request $request, Order $order)
     {
-        if ($order->user_id !== auth()->id()) {
+        return handleApiRequest(function () use ($request, $order) {
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized',
-                'data' => null
-            ], 403);
-        }
+            if ($order->user_id !== Auth::id()) {
+                throw new \App\Http\Exceptions\ApiStatusException(
+                    'Unauthorized',
+                    403
+                );
+            }
 
-        $request->validate([
-            'status' => 'required|in:pending,confirmed,shipped,delivered,cancelled',
-        ]);
+            $request->validate([
+                'status' => 'required|in:pending,confirmed,shipped,delivered,cancelled',
+            ]);
 
-        $order->update([
-            'status' => $request->status,
-        ]);
+            $order->update([
+                'status' => $request->status,
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Order Updated Successfully',
-            'data' => $order->fresh()->load('items.product')
-        ]);
+            $this->response['msg'] =
+                'Order Updated Successfully';
+
+            $this->response['data'] =
+                $order->fresh()->load('items.product');
+
+            return response()->json($this->response);
+        });
     }
 }
