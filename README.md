@@ -1,4 +1,3 @@
-![Bhajiwala Backend](./banner.png)
 # 🥬 Bhajiwala Backend
 
 A complete **Grocery & Vegetable E-commerce REST API Backend** built with **Laravel 11** and **PHP**.
